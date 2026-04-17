@@ -6,6 +6,9 @@ import hashlib
 import matplotlib.pyplot as plt
 from collections import defaultdict
 import os
+# --- 新增：用于余弦相似度验证 ---
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 # --- Academic Style Configuration ---
 plt.rcParams['font.family'] = 'serif'
@@ -143,6 +146,17 @@ def run_experiment(file_list, k_val=2, n_perms=100, b_val=20, r_val=5, s_thresh=
 
     # 2. Shingling Stage
     doc_words = [mgr.preprocess(c) for c in contents]
+
+    # --- 修改点 1: 步骤 1 的 k 值对比 ---
+    print("\n[Step 1: Impact of k-shingle size on Jaccard Similarity]")
+    for k_test in [2, 5, 10]:
+        test_shingles = [mgr.get_shingles(w, k_test, 'char') for w in doc_words]
+        if len(test_shingles) >= 2:
+            s1, s2 = test_shingles[0], test_shingles[1]
+            sim = len(s1 & s2) / len(s1 | s2) if (s1 | s2) else 0
+            print(f"k = {k_test:<2} | Jaccard(Doc1, Doc2) = {sim:.4f}")
+    print("-" * 50)
+
     all_shingles = [mgr.get_shingles(w, k_val, 'char') for w in doc_words]
 
     # 3. Compute Ground Truth Jaccard Similarity
@@ -226,6 +240,7 @@ def run_experiment(file_list, k_val=2, n_perms=100, b_val=20, r_val=5, s_thresh=
     plt.grid(True)
     plt.savefig("plot_theoretical_scurve.png", dpi=300);
     plt.close()
+
     # 详细结果打印 (Detailed Terminal Output) ---
     print("\n" + "=" * 50)
     print("      LSH EXPERIMENT DETAILED REPORT")
@@ -258,6 +273,21 @@ def run_experiment(file_list, k_val=2, n_perms=100, b_val=20, r_val=5, s_thresh=
     print(f"- False Negatives (FN): {fn}")
     print(f"- Precision: {tp / (tp + fp) if (tp + fp) > 0 else 0:.4f}")
     print(f"- Recall (Sensitivity): {tp / (tp + fn) if (tp + fn) > 0 else 0:.4f}")
+
+    # --- 修改点 2: 步骤 4 的余弦相似度精准验证 ---
+    print("\n[Step 4: Cosine Similarity Verification for Candidates]")
+    print(f"{'Candidate Pair':<15} | {'Cosine Sim':<15} | {'Is Truly Similar?'}")
+    print("-" * 60)
+
+    vectorizer = TfidfVectorizer()
+    valid_contents = [c if c.strip() else " " for c in contents]
+    tfidf_matrix = vectorizer.fit_transform(valid_contents)
+
+    for (i, j) in sorted(final_cands):
+        cos_sim = cosine_similarity(tfidf_matrix[i], tfidf_matrix[j])[0][0]
+        is_similar = "YES" if cos_sim > 0.3 else "NO"
+        print(f"Doc{i+1}-Doc{j+1:<8} | {cos_sim:<15.4f} | {is_similar}")
+
     print("=" * 50)
     print("\nExperiment complete. Analysis plots generated.")
 
